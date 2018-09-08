@@ -367,7 +367,7 @@ pub fn parse(tokens: &Vec<Token>) -> Result<Vec<u8>, ParserError> {
                         })
                     }
                 },
-                "jp" => match &tokens[i + 1] {
+                "yeet" => match &tokens[i + 1] {
                     Token::Word(_, condition) => match condition.to_lowercase().as_ref() {
                         "gt" => match tokens[i + 2] {
                             Token::EOL(_) => {
