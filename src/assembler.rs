@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -8,12 +9,12 @@ pub enum Token {
 }
 
 #[derive(Debug, Clone)]
-pub struct ParseError {
+pub struct TokenizerError {
     pattern: String,
     position: usize,
 }
 
-impl fmt::Display for ParseError {
+impl fmt::Display for TokenizerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -23,7 +24,7 @@ impl fmt::Display for ParseError {
     }
 }
 
-pub fn parse(source: &str) -> Result<Vec<Token>, ParseError> {
+pub fn tokenize(source: &str) -> Result<Vec<Token>, TokenizerError> {
     let mut expect_letter = true;
     let mut expect_newline = true;
     let mut expect_number = false;
@@ -118,12 +119,12 @@ pub fn parse(source: &str) -> Result<Vec<Token>, ParseError> {
 
         if !res {
             if el == '\n' {
-                return Err(ParseError {
+                return Err(TokenizerError {
                     position: i,
                     pattern: "\\n".to_string(),
                 });
             } else {
-                return Err(ParseError {
+                return Err(TokenizerError {
                     position: i,
                     pattern: el.to_string(),
                 });
@@ -137,12 +138,12 @@ pub fn parse(source: &str) -> Result<Vec<Token>, ParseError> {
 }
 
 #[derive(Debug, Clone)]
-pub struct AssembleError<'a> {
+pub struct ParserError<'a> {
     token: &'a Token,
     expected: Token,
 }
 
-impl<'a> fmt::Display for AssembleError<'a> {
+impl<'a> fmt::Display for ParserError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -152,31 +153,135 @@ impl<'a> fmt::Display for AssembleError<'a> {
     }
 }
 
-pub fn assemble(tokens: &Vec<Token>) -> Result<Vec<u8>, AssembleError> {
+pub fn parse(tokens: &Vec<Token>) -> Result<Vec<u8>, ParserError> {
     let mut i = 0;
-    let mut mem = Vec::new();
+    let mut mem: Vec<u8> = Vec::new();
+    let mut name_table: HashMap<String, u8> = HashMap::new();
+    let mut instruction = 0;
 
     while i < tokens.len() {
         let token = &tokens[i];
 
         match token {
             Token::Word(_, word) => match word.to_lowercase().as_ref() {
-                "push" => match tokens[i + 1] {
+                "dw" => match &tokens[i + 1] {
+                    Token::Word(_, name) => match &tokens[i + 2] {
+                        Token::Number(_, number) => match tokens[i + 3] {
+                            Token::EOL(_) => {
+                                i += 4;
+                                name_table.insert(name.to_string(), instruction);
+                                mem.push(*number);
+                            }
+                            _ => {
+                                return Err(ParserError {
+                                    token: &tokens[i + 2],
+                                    expected: Token::EOL(0),
+                                })
+                            }
+                        },
+                        _ => {
+                            return Err(ParserError {
+                                token: &tokens[i + 1],
+                                expected: Token::Number(0, 0),
+                            })
+                        }
+                    },
                     Token::Number(_, number) => match tokens[i + 2] {
                         Token::EOL(_) => {
                             i += 3;
-                            mem.push(0x01);
-                            mem.push(number);
+                            mem.push(*number);
                         }
                         _ => {
-                            return Err(AssembleError {
+                            return Err(ParserError {
                                 token: &tokens[i + 2],
                                 expected: Token::EOL(0),
                             })
                         }
                     },
                     _ => {
-                        return Err(AssembleError {
+                        return Err(ParserError {
+                            token: &tokens[i + 1],
+                            expected: Token::Number(0, 0),
+                        })
+                    }
+                },
+                "halt" => match tokens[i + 1] {
+                    Token::EOL(_) => {
+                        i += 2;
+                        instruction += 1;
+                        mem.push(0x00);
+                    }
+                    _ => {
+                        return Err(ParserError {
+                            token: &tokens[i + 1],
+                            expected: Token::EOL(0),
+                        })
+                    }
+                },
+                "load" => match tokens[i + 1] {
+                    Token::EOL(_) => {
+                        i += 2;
+                        instruction += 1;
+                        mem.push(0x01);
+                    }
+                    _ => {
+                        return Err(ParserError {
+                            token: &tokens[i + 1],
+                            expected: Token::EOL(0),
+                        })
+                    }
+                },
+                "store" => match tokens[i + 1] {
+                    Token::EOL(_) => {
+                        i += 2;
+                        instruction += 1;
+                        mem.push(0x02);
+                    }
+                    _ => {
+                        return Err(ParserError {
+                            token: &tokens[i + 1],
+                            expected: Token::EOL(0),
+                        })
+                    }
+                },
+                "push" => match &tokens[i + 1] {
+                    Token::Word(_, name) => match tokens[i + 2] {
+                        Token::EOL(_) => {
+                            i += 3;
+                            if name_table.contains_key(name) {
+                                instruction += 2;
+                                mem.push(0x03);
+                                mem.push(name_table[name]);
+                            } else {
+                                return Err(ParserError {
+                                    token: &tokens[i + 2],
+                                    expected: Token::Word(0, "unknown label".to_string()),
+                                });
+                            }
+                        }
+                        _ => {
+                            return Err(ParserError {
+                                token: &tokens[i + 2],
+                                expected: Token::EOL(0),
+                            })
+                        }
+                    },
+                    Token::Number(_, number) => match tokens[i + 2] {
+                        Token::EOL(_) => {
+                            i += 3;
+                            instruction += 2;
+                            mem.push(0x03);
+                            mem.push(*number);
+                        }
+                        _ => {
+                            return Err(ParserError {
+                                token: &tokens[i + 2],
+                                expected: Token::EOL(0),
+                            })
+                        }
+                    },
+                    _ => {
+                        return Err(ParserError {
                             token: &tokens[i + 1],
                             expected: Token::Number(0, 0),
                         })
@@ -185,10 +290,11 @@ pub fn assemble(tokens: &Vec<Token>) -> Result<Vec<u8>, AssembleError> {
                 "pop" => match tokens[i + 1] {
                     Token::EOL(_) => {
                         i += 2;
-                        mem.push(0x02);
+                        instruction += 1;
+                        mem.push(0x04);
                     }
                     _ => {
-                        return Err(AssembleError {
+                        return Err(ParserError {
                             token: &tokens[i + 1],
                             expected: Token::EOL(0),
                         })
@@ -197,24 +303,186 @@ pub fn assemble(tokens: &Vec<Token>) -> Result<Vec<u8>, AssembleError> {
                 "add" => match tokens[i + 1] {
                     Token::EOL(_) => {
                         i += 2;
-                        mem.push(0x03);
+                        instruction += 1;
+                        mem.push(0x05);
                     }
                     _ => {
-                        return Err(AssembleError {
+                        return Err(ParserError {
                             token: &tokens[i + 1],
                             expected: Token::EOL(0),
                         })
                     }
                 },
+                "sub" => match tokens[i + 1] {
+                    Token::EOL(_) => {
+                        i += 2;
+                        instruction += 1;
+                        mem.push(0x06);
+                    }
+                    _ => {
+                        return Err(ParserError {
+                            token: &tokens[i + 1],
+                            expected: Token::EOL(0),
+                        })
+                    }
+                },
+                "and" => match tokens[i + 1] {
+                    Token::EOL(_) => {
+                        i += 2;
+                        instruction += 1;
+                        mem.push(0x07);
+                    }
+                    _ => {
+                        return Err(ParserError {
+                            token: &tokens[i + 1],
+                            expected: Token::EOL(0),
+                        })
+                    }
+                },
+                "or" => match tokens[i + 1] {
+                    Token::EOL(_) => {
+                        i += 2;
+                        instruction += 1;
+                        mem.push(0x08);
+                    }
+                    _ => {
+                        return Err(ParserError {
+                            token: &tokens[i + 1],
+                            expected: Token::EOL(0),
+                        })
+                    }
+                },
+                "xor" => match tokens[i + 1] {
+                    Token::EOL(_) => {
+                        i += 2;
+                        instruction += 1;
+                        mem.push(0x09);
+                    }
+                    _ => {
+                        return Err(ParserError {
+                            token: &tokens[i + 1],
+                            expected: Token::EOL(0),
+                        })
+                    }
+                },
+                "jp" => match &tokens[i + 1] {
+                    Token::Word(_, condition) => match condition.to_lowercase().as_ref() {
+                        "gt" => match tokens[i + 2] {
+                            Token::EOL(_) => {
+                                i += 3;
+                                mem.push(0x0A);
+                                mem.push(0x01);
+                                instruction += 2;
+                            }
+                            _ => {
+                                return Err(ParserError {
+                                    token: &tokens[i + 2],
+                                    expected: Token::EOL(0),
+                                })
+                            }
+                        },
+                        "lt" => match tokens[i + 2] {
+                            Token::EOL(_) => {
+                                i += 3;
+                                mem.push(0x0A);
+                                mem.push(0x02);
+                                instruction += 2;
+                            }
+                            _ => {
+                                return Err(ParserError {
+                                    token: &tokens[i + 2],
+                                    expected: Token::EOL(0),
+                                })
+                            }
+                        },
+                        "geq" => match tokens[i + 2] {
+                            Token::EOL(_) => {
+                                i += 3;
+                                mem.push(0x0A);
+                                mem.push(0x03);
+                                instruction += 2;
+                            }
+                            _ => {
+                                return Err(ParserError {
+                                    token: &tokens[i + 2],
+                                    expected: Token::EOL(0),
+                                })
+                            }
+                        },
+                        "leq" => match tokens[i + 2] {
+                            Token::EOL(_) => {
+                                i += 3;
+                                mem.push(0x0A);
+                                mem.push(0x04);
+                                instruction += 2;
+                            }
+                            _ => {
+                                return Err(ParserError {
+                                    token: &tokens[i + 2],
+                                    expected: Token::EOL(0),
+                                })
+                            }
+                        },
+                        "eq" => match tokens[i + 2] {
+                            Token::EOL(_) => {
+                                i += 3;
+                                mem.push(0x0A);
+                                mem.push(0x05);
+                                instruction += 2;
+                            }
+                            _ => {
+                                return Err(ParserError {
+                                    token: &tokens[i + 2],
+                                    expected: Token::EOL(0),
+                                })
+                            }
+                        },
+                        "neq" => match tokens[i + 2] {
+                            Token::EOL(_) => {
+                                i += 3;
+                                mem.push(0x0A);
+                                mem.push(0x06);
+                                instruction += 2;
+                            }
+                            _ => {
+                                return Err(ParserError {
+                                    token: &tokens[i + 2],
+                                    expected: Token::EOL(0),
+                                })
+                            }
+                        },
+                        _ => {
+                            return Err(ParserError {
+                                token: &tokens[i + 1],
+                                expected: Token::Word(
+                                    0,
+                                    "EOL or gt, lt, geq, leq, eq, neq".to_string(),
+                                ),
+                            })
+                        }
+                    },
+                    Token::EOL(_) => {
+                        i += 2;
+                        mem.push(0x0A);
+                        mem.push(0x00);
+                        instruction += 2;
+                    }
+                    _ => {
+                        return Err(ParserError {
+                            token: &tokens[i + 1],
+                            expected: Token::Number(0, 0),
+                        })
+                    }
+                },
                 _ => {
-                    return Err(AssembleError {
+                    return Err(ParserError {
                         token,
                         expected: Token::EOL(0),
                     })
                 }
             },
             _ => {
-                return Err(AssembleError {
+                return Err(ParserError {
                     token,
                     expected: Token::Word(0, "PUSH, POP, ADD".to_string()),
                 })
