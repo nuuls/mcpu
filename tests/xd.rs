@@ -27,7 +27,7 @@ fn it_adds() {
 
 #[test]
 fn it_parses() {
-    match mcpu::assembler::parse("PUSH 0x8\nADD\n") {
+    match mcpu::assembler::parse("PUSH 0x8;ADD;") {
         Ok(tokens) => {
             println!("{:?}", tokens);
             assert_eq!(tokens.len(), 5)
@@ -38,7 +38,7 @@ fn it_parses() {
 
 #[test]
 fn it_assembles() {
-    match mcpu::assembler::parse("PUSH 0x1\nPUSH 0x1\nADD\n") {
+    match mcpu::assembler::parse("PUSH 0x1;PUSH 0x1;ADD;") {
         Ok(tokens) => {
             println!("{:?}", tokens);
             match mcpu::assembler::assemble(&tokens) {

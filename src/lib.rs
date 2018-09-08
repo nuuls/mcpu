@@ -25,6 +25,19 @@ impl Emulator {
         }
     }
 
+    pub fn load(&mut self, program: &[u8]) {
+        for i in 0..program.len() {
+            self.write(i, program[i]);
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.memory = [0; MEMORY_SIZE];
+        self.pc = 0;
+        self.sp = (MEMORY_SIZE - 1) as u8;
+        self.running = true;
+    }
+
     pub fn read(&self, pos: usize) -> u8 {
         self.memory[pos]
     }
