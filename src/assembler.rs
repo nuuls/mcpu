@@ -170,6 +170,7 @@ pub fn parse(tokens: &Vec<Token>) -> Result<Vec<u8>, ParserError> {
                             Token::EOL(_) => {
                                 i += 4;
                                 name_table.insert(name.to_string(), instruction);
+                                instruction += 1;
                                 mem.push(*number);
                             }
                             _ => {
@@ -189,6 +190,7 @@ pub fn parse(tokens: &Vec<Token>) -> Result<Vec<u8>, ParserError> {
                     Token::Number(_, number) => match tokens[i + 2] {
                         Token::EOL(_) => {
                             i += 3;
+                            instruction += 1;
                             mem.push(*number);
                         }
                         _ => {

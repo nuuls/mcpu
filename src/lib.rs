@@ -23,14 +23,20 @@ impl Emulator {
         }
     }
 
+    pub fn early_halt(&mut self) {
+        self.running = false;
+    }
+
+    pub fn reset(&mut self) {
+        self.write(PC, 0);
+        self.write(SP, (MEMORY_SIZE - 3) as u8);
+        self.running = true;
+    }
+
     pub fn load(&mut self, program: &[u8]) {
         for i in 0..program.len() {
             self.write(i, program[i]);
         }
-
-        self.memory[PC] = 0;
-        self.memory[SP] = (MEMORY_SIZE - 3) as u8;
-        self.running = true;
     }
 
     pub fn read(&self, pos: usize) -> u8 {
@@ -42,10 +48,9 @@ impl Emulator {
     }
 
     fn push(&mut self, data: u8) {
-        let pos = self.memory[SP];
+        let pos = self.read(SP);
         self.write(pos as usize, data);
-        println!("{} {}", data, pos);
-        self.memory[SP] = pos - 1;
+        self.write(SP, pos - 1);
     }
 
     fn pop(&mut self) -> u8 {
@@ -115,7 +120,8 @@ impl Emulator {
                 self.memory[PC] += 1;
 
                 let location = self.pop();
-                let condition = self.read(PC);
+                let cond_location = self.read(PC);
+                let condition = self.read(cond_location as usize);
 
                 let should_jump = match condition {
                     0x00 => true,
