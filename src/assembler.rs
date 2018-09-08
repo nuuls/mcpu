@@ -65,7 +65,7 @@ pub fn tokenize(source: &str) -> Result<Vec<Token>, TokenizerError> {
             } else {
                 false
             },
-            ';' => if expect_newline {
+            '\n' => if expect_newline {
                 if expect_letter {
                     tokens.push(Token::Word(i - curr_token.len(), curr_token.clone()));
                     curr_token = String::new();

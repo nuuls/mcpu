@@ -92,13 +92,13 @@ impl Emulator {
                 self.pop();
             }
             0x05 => {
-                let a = self.pop() as i8;
-                let b = self.pop() as i8;
+                let a = self.pop();
+                let b = self.pop();
                 self.push((a + b) as u8);
             }
             0x06 => {
-                let a = self.pop() as i8;
-                let b = self.pop() as i8;
+                let a = self.pop();
+                let b = self.pop();
                 self.push((a - b) as u8);
             }
             0x07 => {
